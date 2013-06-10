@@ -6,13 +6,17 @@ var TimerView = Backbone.View.extend({
     'click #stop': 'stopTicking'
   },
   initialize: function() {
-    _.bindAll(this, 'render', 'tick', 'queueNextActivity', 'startTicking', 'stopTicking', 'completeWorkout');
+    _.bindAll(this, 'render', 'tick', 'rest', 'startActivity', 'queueNextActivity', 'startTicking', 'stopTicking', 'completeWorkout');
 
     this.isRunning = false;
     this.pristine= true;
     this.timer = null;
-    this.currentActivity = { index: 0, rep: 0 }
+    this.currentActivity = { index: 0, rep: 1 }
+    this.resting = false;
     this.activities = [];
+    this.startTime = null;
+    this.pausedTime = null;
+    this.totalTime = null;
 
     this.template = Handlebars.compile($("#timer-template").html());
   },
@@ -21,28 +25,21 @@ var TimerView = Backbone.View.extend({
 
     return this;
   },
-  tick: function(hrs, mins, secs, ms, cb) {
-    if (hrs == 0 && mins == 0 && secs == 0 && ms == 0) {
-      clearTimeout(this.timer);
-      return cb();
-    } else if (mins == 0 && secs == 0 && ms == 0) {
-      hrs--;
-      mins = 59;
-      secs = 59;
-      ms = 99;
-    } else if (secs == 0 && ms == 0) {
-      mins--;
-      secs = 59;
-      ms = 99;
-    } else if (ms == 0) {
-      secs--;
-      ms = 99;
+  tick: function() {
+    var curTime = new Date();
+    var timeRemaining = this.totalTime - (curTime - this.startTime);
+    if (timeRemaining <= 0) {
+      this.queueNextActivity();
     } else {
-      ms--;
+      var hrs = Math.floor(timeRemaining/3600000);
+      timeRemaining -= 3600000 * hrs;
+      var mins = Math.floor(timeRemaining/60000);
+      timeRemaining -= 60000 * mins;
+      var secs = Math.floor(timeRemaining/1000);
+      timeRemaining -= 1000 * secs;
+      $("#time").text(formatTime(hrs) + ":" + formatTime(mins) + ":" + formatTime(secs) + "." + formatTime(timeRemaining));
+      this.timer = setTimeout(this.tick, 0);
     }
-
-    $("#time").text(formatTime(hrs) + ":" + formatTime(mins) + ":" + formatTime(secs) + "." + formatTime(ms));
-    this.timer = setTimeout(this.tick, 10, hrs, mins, secs, ms, cb);
 
     function formatTime(time) {
       if (time == "") {
@@ -54,22 +51,45 @@ var TimerView = Backbone.View.extend({
       }
     }
   },
+  rest: function() {
+    this.startTime = new Date();
+    this.totalTime = 6000;
+    $("#activity").text("REST!");
+    this.tick();
+  },
+  startActivity: function() {
+    activity = this.activities[this.currentActivity.index];
+    this.setTime(activity);
+    var startTime = new Date();
+    $("#activity").text(activity.get('name'));
+    this.tick();
+  },
   queueNextActivity: function() {
-    var activity = this.activities[this.currentActivity.index];
+    var next, activity = this.activities[this.currentActivity.index];
+    this.resting = !this.resting;
+
     if (this.currentActivity.rep == activity.get("reps")) {
       if (this.activities.length > this.currentActivity.index + 1) {
-        this.currentActivity.index++;
-        activity = this.activities[this.currentActivity.index];
-        this.currentActivity.rep = 0;
+        if (!this.resting) {
+          this.currentActivity.index++;
+          this.currentActivity.rep = 1;
+        }
       } else {
-        return this.completeWorkout();
+        next = this.completeWorkout;
       }
     } else {
-      this.currentActivity.rep++;
+      if (!this.resting) this.currentActivity.rep++;
     }
 
-    $("#activity").text(activity.get('name'));
-    this.tick(activity.get('hrs'), activity.get('mins'), activity.get('secs'), 0, this.queueNextActivity);
+    if (!next) {
+      if (this.resting) {
+        next = this.rest;          
+      } else {
+        next = this.startActivity;
+      }
+    }
+
+    next();
   },
   startTicking: function() {
     if (this.pristine && !this.isRunning) {
@@ -79,32 +99,28 @@ var TimerView = Backbone.View.extend({
       });
 
       if (this.activities.length > 0) {
+        $("#stop").attr('disabled', false);
         this.isRunning = true;
         this.pristine = false;
         $("#stop").text("Stop");
-        this.queueNextActivity()
+        this.startActivity();
       }
     } else {
       $("#stop").text("Stop");
       this.isRunning = true;
-      this.tick(this.timeRemaining[0], this.timeRemaining[1], this.timeRemaining[2], this.timeRemaining[3], this.queueNextActivity);
+      this.tick();
     }
+  },
+  setTime: function(activity) {
+    this.totalTime = activity.get('hrs') * 3600000 + activity.get('mins') * 60000 + activity.get('secs') * 1000 + 1000;
+    this.startTime = new Date();
   },
   stopTicking: function() {
     if (this.isRunning) {
       clearTimeout(this.timer);
+      this.pausedTime = new Date();
       this.isRunning = false;
       $("#stop").text("Clear");
-      timeRemaining = $("#time").text().match(/([0-9]{2}):([0-9]{2}):([0-9]{2})\.([0-9]{2})/);
-      if (timeRemaining) {
-        timeRemaining =  timeRemaining.slice(1, 5);
-
-        if (_(timeRemaining).all(function(t) {return t == "00"})) {
-          this.pristine = true;
-        } else {
-          this.timeRemaining = timeRemaining;
-        }
-      }
     } else if (!this.pristine) {
       this.resetTimer();
     }
@@ -112,10 +128,16 @@ var TimerView = Backbone.View.extend({
   resetTimer: function() {
     this.isRunning = false;
     this.pristine = true;
-    this.currentActivity.rep = 0;
+    this.currentActivity.rep = 1;
     this.currentActivity.index = 0;
+    this.resting = false;
+    this.startTime = null;
+    this.pausedTime = null;
+    this.totalTime = null;
     $("#time").text("00:00:00.00");
     $("#stop").text("Clear");
+    $("#activity").empty();
+    $("#stop").attr('disabled', true);
   },
   completeWorkout: function() {
     $("#activity").text("Complete");
