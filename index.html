@@ -2,44 +2,31 @@
 <html>
   <head>
     <title>Workout Timer</title>
-    <script src="vendor/jquery.min.js"></script>
-    <script src="vendor/handlebars.js"></script>
-    <script src="vendor/underscore-min.js"></script>
-    <script src="vendor/backbone-min.js"></script>
-
-    <script src="models/Activity.js"></script>
-    <script src="collections/Activities.js"></script>
-    <script src="views/AppView.js"></script>
-    <script src="views/ActivityView.js"></script>
-    <script src="views/ActivitiesInputView.js"></script>
-    <script src="views/TimerView.js"></script>
+    <script src="lib/angular.min.js"></script>
+    <script src="lib/underscore-min.js"></script>
     <script src="main.js"></script>
     <link rel="stylesheet" type="text/css" href="base.css">
-
-    <script type="text/javascript">
-      var app = _({}).extend(Backbone.Events);
-    </script>
-
-    <script id="app-template" type="text/x-handlebars-template">
-      <button id="add-activity">Add Activity</button>
-    </script>
-
-    <script id="timer-template" type="text/x-handlebars-template">
-      <div id="time">00:00:00.00</div>
-      <div id="activity"></div>
-      <button id="start">Start</button>
-      <button id="stop" disabled>Clear</button>
-    </script>
-
-    <script id="activity-template" type="text/x-handlebars-template">
-      <input class="name" type="text" placeholder="Enter an activity" value="{{name}}" />
-      <input class="hrs" type="text" placeholder="Hrs." size="3" value="{{hrs}}" />
-      <input class="mins" type="text" placeholder="Mins." size="3" value="{{mins}}" />
-      <input class="secs" type="text" placeholder="Secs." size="3" value="{{secs}}" />
-      <input class="reps" type="text" placeholder="Reps" size="3" value="{{reps}}" />
-      <button class="remove">Remove</button>
-    </script>
   </head>
-  <body>
+  <body ng-app="workout-timer">
+    <div id="container" ng-controller="WorkoutTimerController" ng-init="init()">
+      <div id="activity-input" ng-hide="workoutStarted">
+        <div id="activities" ng-repeat="activity in activities">
+          <input class="name" type="text" placeholder="Enter an activity" ng-model="activity.name" />
+          <input class="hrs" type="text" placeholder="Hrs." size="3" ng-model="activity.hrs" />
+          <input class="mins" type="text" placeholder="Mins." size="3" ng-model="activity.mins" />
+          <input class="secs" type="text" placeholder="Secs." size="3" ng-model="activity.secs" />
+          <input class="reps" type="text" placeholder="Reps" size="3" ng-model="activity.reps" />
+          <button class="remove" ng-click="removeActivity($index)">Remove</button>
+        </div>
+        <button id="add-activity" ng-click="addActivity()">Add Activity</button>
+      </div>
+      <div id="timer">
+        <div id="time">{{timeRemaining && timeRemaining || '00:00:00'}}</div>
+        <div id="activity" ng-show="startTime">{{currentActivity.name}}</div>
+        <div id="complete" ng-show="workoutComplete">Complete!</div>
+        <button id="start" ng-click="startWorkout()">Start</button>
+        <button id="stop" ng-disabled="cleared" ng-click="{{isRunning && pauseWorkout() || clearWorkout()}}">{{isRunning && 'Pause' || 'Clear'}}</button>
+      </div>
+    </div>
   </body>
 </html>
